@@ -12,7 +12,7 @@ type Order struct {
 
 type OrderItem struct {
 	ItemID   primitive.ObjectID `bson:"item_id"`
-	Quantity int32              `bson:"quantity"`
+	Quantity int                `bson:"quantity"`
 }
 
 type CreateOrderDto struct {

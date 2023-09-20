@@ -35,6 +35,18 @@ func GetProductByID(id primitive.ObjectID) (model.Product, error) {
 	return product, nil
 }
 
+func GetProductByPriceID(priceID string) (model.Product, error) {
+	var product model.Product
+
+	filter := bson.M{"stripe_id": priceID}
+	err := products.FindOne(context.TODO(), filter).Decode(&product)
+	if err != nil {
+		return model.Product{}, err
+	}
+
+	return product, nil
+}
+
 func GetOrderByID(id primitive.ObjectID) (model.Order, error) {
 	var order model.Order
 
@@ -47,8 +59,7 @@ func GetOrderByID(id primitive.ObjectID) (model.Order, error) {
 	return order, nil
 }
 
-// TODO: Finish
-func createOrder(orderDto model.CreateOrderDto) error {
+func CreateOrder(orderDto model.CreateOrderDto) error {
 	// Create a new MongoDB document for the order
 	order := bson.M{
 		"customer_id": orderDto.CustomerID,

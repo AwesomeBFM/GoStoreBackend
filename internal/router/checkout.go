@@ -2,7 +2,9 @@ package router
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/awesomebfm/go-store-backend/internal/database"
+	"github.com/awesomebfm/go-store-backend/internal/model"
 	"github.com/awesomebfm/go-store-backend/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/stripe/stripe-go/v75"
@@ -34,11 +36,13 @@ func CreateCheckoutSession(c *gin.Context) {
 	for i := 0; i < len(body.Items); i++ {
 		productId, err := primitive.ObjectIDFromHex(body.Items[i].ID)
 		if err != nil {
+			fmt.Println(err)
 			continue
 		}
 
 		product, err := database.GetProductByID(productId)
 		if err != nil {
+			fmt.Println(err)
 			continue
 		}
 
@@ -83,9 +87,10 @@ func HandleWebhook(c *gin.Context) {
 		return
 	}
 
+	// TODO: There appears to be an issue with Webhook Signature Verification
 	event, err := webhook.ConstructEvent(payload, c.Request.Header.Get("Stripe-Signature"), webhookSecret)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Webhook signature verification failed"})
+		c.JSON(http.StatusForbidden, gin.H{"error": "Webhook signature verification failed"})
 		return
 	}
 
@@ -100,23 +105,32 @@ func HandleWebhook(c *gin.Context) {
 
 		// Extract items from the line items in the session
 		// TODO: finish
-		/*items := []service.CheckoutItemDto{}
+		var items []model.OrderItem
 		for _, item := range session.LineItems.Data {
-			items = append(items, service.CheckoutItemDto{
-				PriceID:  item.Price.ID,
-				Quantity: int(item.Quantity),
-			})
+			temp, err := database.GetProductByPriceID(item.Price.ID)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid product provided!"})
+				return
+			}
+			items = append(items, model.OrderItem{ItemID: temp.ID, Quantity: int(item.Quantity)})
 		}
 
 		// Extract customer ID from the client reference ID
 		customerID, err := primitive.ObjectIDFromHex(session.ClientReferenceID)
-		var total float64 = float64(session.AmountTotal / 100)
+		total := float64(session.AmountTotal / 100)
 
 		order := model.CreateOrderDto{
 			CustomerID: customerID,
 			Total:      total,
-			Items:      nil,
-		}*/
+			Items:      items,
+		}
+
+		// Save the order to the database
+		err = database.CreateOrder(order)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Something went very wrong!"})
+			return
+		}
 
 		c.JSON(http.StatusOK, gin.H{"message": "Success!"})
 		return
