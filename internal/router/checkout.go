@@ -88,7 +88,9 @@ func HandleWebhook(c *gin.Context) {
 	}
 
 	// TODO: There appears to be an issue with Webhook Signature Verification
-	event, err := webhook.ConstructEvent(payload, c.Request.Header.Get("Stripe-Signature"), webhookSecret)
+	// There appears to be an issue with stripe-go vs stripe-cli being out of date (stripe-go is newer)
+	event, err := webhook.ConstructEventWithOptions(payload, c.Request.Header.Get("Stripe-Signature"), webhookSecret, webhook.ConstructEventOptions{IgnoreAPIVersionMismatch: true})
+	//event, err := webhook.ConstructEvent(payload, c.Request.Header.Get("Stripe-Signature"), webhookSecret)
 	if err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Webhook signature verification failed"})
 		return
