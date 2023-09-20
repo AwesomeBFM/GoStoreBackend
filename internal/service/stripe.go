@@ -8,8 +8,8 @@ import (
 )
 
 type CheckoutItemDto struct {
-	PriceID  string `bson:"price_id"`
-	Quantity int    `bson:"quantity"`
+	PriceID  string `json:"price_id"`
+	Quantity int    `json:"quantity"`
 }
 
 func GenerateCheckoutSession(items []CheckoutItemDto, customerId primitive.ObjectID) (string, error) {
