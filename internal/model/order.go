@@ -14,3 +14,9 @@ type OrderItem struct {
 	ItemID   primitive.ObjectID `bson:"item_id"`
 	Quantity int32              `bson:"quantity"`
 }
+
+type CreateOrderDto struct {
+	CustomerID primitive.ObjectID `bson:"customer_id"`
+	Total      float64            `bson:"total"`
+	Items      []OrderItem        `bson:"items"`
+}

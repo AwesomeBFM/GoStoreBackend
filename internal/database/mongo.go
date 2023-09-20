@@ -47,6 +47,24 @@ func GetOrderByID(id primitive.ObjectID) (model.Order, error) {
 	return order, nil
 }
 
+// TODO: Finish
+func createOrder(orderDto model.CreateOrderDto) error {
+	// Create a new MongoDB document for the order
+	order := bson.M{
+		"customer_id": orderDto.CustomerID,
+		"total":       orderDto.Total,
+		"items":       orderDto.Items,
+	}
+
+	// Insert the order document into the MongoDB collection
+	_, err := products.InsertOne(context.TODO(), order)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func Close() error {
 	err := client.Disconnect(context.TODO())
 	return err

@@ -94,8 +94,33 @@ func HandleWebhook(c *gin.Context) {
 		var session stripe.CheckoutSession
 		err := json.Unmarshal(event.Data.Raw, &session)
 		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Error parsing webhook JSON!"})
 			return
 		}
+
+		// Extract items from the line items in the session
+		// TODO: finish
+		/*items := []service.CheckoutItemDto{}
+		for _, item := range session.LineItems.Data {
+			items = append(items, service.CheckoutItemDto{
+				PriceID:  item.Price.ID,
+				Quantity: int(item.Quantity),
+			})
+		}
+
+		// Extract customer ID from the client reference ID
+		customerID, err := primitive.ObjectIDFromHex(session.ClientReferenceID)
+		var total float64 = float64(session.AmountTotal / 100)
+
+		order := model.CreateOrderDto{
+			CustomerID: customerID,
+			Total:      total,
+			Items:      nil,
+		}*/
+
+		c.JSON(http.StatusOK, gin.H{"message": "Success!"})
+		return
+
 	default:
 		c.JSON(http.StatusOK, gin.H{"message": "Unhandled event type"})
 	}
