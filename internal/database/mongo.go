@@ -2,37 +2,49 @@ package database
 
 import (
 	"context"
-	"encoding/json"
+	"github.com/awesomebfm/go-store-backend/internal/model"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 var client *mongo.Client
-var orders *mongo.Collection
+var products *mongo.Collection
 
 func Init(uri string, database string) error {
 	var err error = nil
 	client, err = mongo.Connect(context.TODO(), options.Client().ApplyURI(uri))
-	orders = client.Database(database).Collection("orders")
+	if err != nil {
+		return err
+	}
 
-	return err
+	products = client.Database(database).Collection("products")
+	return nil
 }
 
-func GetOrderByID(id int64) []byte {
-	var result bson.M
+func GetProductByID(id primitive.ObjectID) (model.Product, error) {
+	var product model.Product
 
-	err := orders.FindOne(context.TODO(), bson.D{{"id", id}}).Decode(&result)
+	filter := bson.M{"_id": id}
+	err := products.FindOne(context.TODO(), filter).Decode(&product)
 	if err != nil {
-		return nil
+		return model.Product{}, err
 	}
 
-	jsonData, err := json.MarshalIndent(result, "", "    ")
+	return product, nil
+}
+
+func GetOrderByID(id primitive.ObjectID) (model.Order, error) {
+	var order model.Order
+
+	filter := bson.M{"_id": id}
+	err := products.FindOne(context.TODO(), filter).Decode(&order)
 	if err != nil {
-		return nil
+		return model.Order{}, err
 	}
 
-	return jsonData
+	return order, nil
 }
 
 func Close() error {

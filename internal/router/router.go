@@ -14,7 +14,7 @@ func NewRouter() *Router {
 func (r *Router) Start() error {
 	router := gin.Default()
 
-	router.POST("/checkout/create", HandleCreateCheckout)
+	router.POST("/checkout/create", CreateCheckoutSession)
 	router.POST("/checkout/webhook", HandleWebhook)
 
 	return router.Run(":8080")

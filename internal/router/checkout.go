@@ -2,11 +2,14 @@ package router
 
 import (
 	"encoding/json"
-	"github.com/awesomebfm/go-store-backend/internal/middleware"
+	"github.com/awesomebfm/go-store-backend/internal/database"
+	"github.com/awesomebfm/go-store-backend/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/stripe/stripe-go/v75"
 	"github.com/stripe/stripe-go/v75/webhook"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"net/http"
+	"os"
 )
 
 type CreateCheckoutBody struct {
@@ -19,7 +22,7 @@ type RequestItem struct {
 	Quantity int    `json:"quantity"`
 }
 
-func HandleCreateCheckout(c *gin.Context) {
+func CreateCheckoutSession(c *gin.Context) {
 	var body CreateCheckoutBody
 
 	if err := c.ShouldBindJSON(&body); err != nil {
@@ -27,18 +30,53 @@ func HandleCreateCheckout(c *gin.Context) {
 		return
 	}
 
-	// Translate
+	var items []service.CheckoutItemDto
+	for i := 0; i < len(body.Items); i++ {
+		productId, err := primitive.ObjectIDFromHex(body.Items[i].ID)
+		if err != nil {
+			continue
+		}
 
-	session, err := middleware.CreateSession()
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		product, err := database.GetProductByID(productId)
+		if err != nil {
+			continue
+		}
+
+		if body.Items[i].Quantity > product.Inventory {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Product is out of stock, or too many units requested!"})
+			return
+		}
+
+		items = append(items, service.CheckoutItemDto{PriceID: product.StripeID, Quantity: body.Items[i].Quantity})
+	}
+
+	if len(items) < 1 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "No items were included!"})
 		return
 	}
-	c.JSON(http.StatusCreated, gin.H{"url": session.URL})
+
+	if body.UserID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "No customer was provided!"})
+		return
+	}
+
+	userId, err := primitive.ObjectIDFromHex(body.UserID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "An error occurred while parsing user_id!"})
+		return
+	}
+
+	url, err := service.GenerateCheckoutSession(items, userId)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "An error occurred while generating checkout url!"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"url": url})
 }
 
 func HandleWebhook(c *gin.Context) {
-	webhookSecret := ""
+	webhookSecret := os.Getenv("STRIPE_WEBHOOK_SECRET")
 	payload, err := c.GetRawData()
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to read request body"})
