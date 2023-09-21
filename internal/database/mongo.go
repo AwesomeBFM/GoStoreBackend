@@ -11,6 +11,7 @@ import (
 
 var client *mongo.Client
 var products *mongo.Collection
+var orders *mongo.Collection
 
 func Init(uri string, database string) error {
 	var err error = nil
@@ -20,6 +21,7 @@ func Init(uri string, database string) error {
 	}
 
 	products = client.Database(database).Collection("products")
+	orders = client.Database(database).Collection("orders")
 	return nil
 }
 
@@ -68,7 +70,7 @@ func CreateOrder(orderDto model.CreateOrderDto) error {
 	}
 
 	// Insert the order document into the MongoDB collection
-	_, err := products.InsertOne(context.TODO(), order)
+	_, err := orders.InsertOne(context.TODO(), order)
 	if err != nil {
 		return err
 	}

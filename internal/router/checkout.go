@@ -8,6 +8,7 @@ import (
 	"github.com/awesomebfm/go-store-backend/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/stripe/stripe-go/v75"
+	"github.com/stripe/stripe-go/v75/checkout/session"
 	"github.com/stripe/stripe-go/v75/webhook"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"net/http"
@@ -87,7 +88,6 @@ func HandleWebhook(c *gin.Context) {
 		return
 	}
 
-	// TODO: There appears to be an issue with Webhook Signature Verification
 	// There appears to be an issue with stripe-go vs stripe-cli being out of date (stripe-go is newer)
 	event, err := webhook.ConstructEventWithOptions(payload, c.Request.Header.Get("Stripe-Signature"), webhookSecret, webhook.ConstructEventOptions{IgnoreAPIVersionMismatch: true})
 	//event, err := webhook.ConstructEvent(payload, c.Request.Header.Get("Stripe-Signature"), webhookSecret)
@@ -98,45 +98,50 @@ func HandleWebhook(c *gin.Context) {
 
 	switch event.Type {
 	case "checkout.session.completed":
-		var session stripe.CheckoutSession
-		err := json.Unmarshal(event.Data.Raw, &session)
+		var checkoutSession stripe.CheckoutSession
+		err := json.Unmarshal(event.Data.Raw, &checkoutSession)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Error parsing webhook JSON!"})
 			return
 		}
 
-		// Extract items from the line items in the session
-		// TODO: finish
+		params := &stripe.CheckoutSessionParams{}
+		params.AddExpand("line_items")
+
+		sessionWithLineItems, _ := session.Get(checkoutSession.ID, params)
+		lineItems := sessionWithLineItems.LineItems
+
+		if lineItems == nil || len(lineItems.Data) < 1 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "No order items found!"})
+			return
+		}
+
 		var items []model.OrderItem
-		for _, item := range session.LineItems.Data {
-			temp, err := database.GetProductByPriceID(item.Price.ID)
+		for _, lineItem := range lineItems.Data {
+			product, err := database.GetProductByPriceID(lineItem.Price.ID)
 			if err != nil {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid product provided!"})
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Error retrieving product!"})
 				return
 			}
-			items = append(items, model.OrderItem{ItemID: temp.ID, Quantity: int(item.Quantity)})
+			items = append(items, model.OrderItem{ItemID: product.ID, Quantity: int(lineItem.Quantity)})
 		}
 
-		// Extract customer ID from the client reference ID
-		customerID, err := primitive.ObjectIDFromHex(session.ClientReferenceID)
-		total := float64(session.AmountTotal / 100)
+		total := float64(sessionWithLineItems.AmountTotal / 100.0)
 
-		order := model.CreateOrderDto{
-			CustomerID: customerID,
-			Total:      total,
-			Items:      items,
-		}
-
-		// Save the order to the database
-		err = database.CreateOrder(order)
+		customerID, err := primitive.ObjectIDFromHex(checkoutSession.ClientReferenceID)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Something went very wrong!"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Error parsing customer ID!"})
+			return
+		}
+
+		err = database.CreateOrder(model.CreateOrderDto{CustomerID: customerID, Total: total, Items: items})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error creating order!"})
 			return
 		}
 
 		c.JSON(http.StatusOK, gin.H{"message": "Success!"})
 		return
-
 	default:
 		c.JSON(http.StatusOK, gin.H{"message": "Unhandled event type"})
 	}
